@@ -3,6 +3,13 @@ Personal sustainability companion for **GEDA – Mission LiFE** (HC26-GEDA01). M
 
 **Live prototype:** https://claude.ai/artifact/EpkzMc19GgRZPht4Xe953L
 
+## Team
+**Team name:** HACKATONNEWVECTORS
+
+- **Team Leader:** Jeevan M Gowda
+- **Member:** Nithya C
+- **Member:** Pranav S J
+
 ## Problem targeted
 HC26-GEDA01: citizens lack personalised, actionable tools to measure their footprint, get real-time energy-saving suggestions and see the impact of their actions. This app operationalises Mission LiFE as a personal sustainability companion.
 
