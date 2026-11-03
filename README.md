@@ -54,6 +54,8 @@ psql -f ../db/schema.sql            # needs PostgreSQL with PostGIS
 ```
 Frontend: open `frontend/index.html` in a browser (no build step; loads three.js from a CDN).
 
+The frontend calls the API at `http://localhost:8000` (override with `window.API_BASE`) for footprint and solar results. If the server is not running it falls back to in-browser calculation and labels results "offline calc" vs "via API".
+
 ## Run with Docker
 ```bash
 docker compose up --build   # API on :8000, PostGIS and Redis started
