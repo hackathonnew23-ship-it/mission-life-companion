@@ -1,9 +1,12 @@
 from typing import Literal
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from . import services as s
 
 app = FastAPI(title="Mission LiFE API", version="0.1.0")
+# Prototype: open CORS so the static frontend can call the API. Restrict origins in production.
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 class FootprintIn(BaseModel):
