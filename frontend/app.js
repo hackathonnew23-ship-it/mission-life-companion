@@ -16,7 +16,12 @@ const $=id=>document.getElementById(id);
 const today=()=>new Date().toISOString().slice(0,10);
 const pts=()=>TASKS.reduce((a,t)=>a+(S.done[today()+t[0]]?t[3]:0),0)+(S.ts||0);
 const fmt=n=>Math.round(n).toLocaleString("en-IN");
-function footprint(f){const m={car:.17,bike:.05,bus:.05,metro:.03,walk:0};
+const API_BASE=window.API_BASE||"http://localhost:8000";
+async function api(path,body){try{const c=new AbortController(),t=setTimeout(()=>c.abort(),2500);
+ const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:c.signal});clearTimeout(t);return r.ok?await r.json():null}catch(e){return null}}
+function localSolar(y,u,a,t){const kw=Math.max(1,Math.min(Math.round(u*12/y*2)/2,Math.floor(a/10*2)/2)),gen=kw*y,cost=kw*60000,sub=Math.min(kw,2)*30000+(kw>2?(Math.min(kw,3)-2)*18000:0),sav=Math.min(gen,u*12)*t;
+ return{kw,yearly_kwh:gen,cost,subsidy:sub,yearly_saving:sav,payback_years:(cost-sub)/sav,co2_tonnes:gen*.82/1000}}
+function footprint(f){if(S.fpRes&&f===S.fp){const r=S.fpRes;return{e:r.electricity,l:r.lpg,t:r.transport,d:r.diet,total:r.total}}const m={car:.17,bike:.05,bus:.05,metro:.03,walk:0};
  const e=f.units*.82,l=f.lpg*42.6,t=f.km*26*m[f.mode],d={veg:50,mix:90,non:130}[f.diet];
  return{e,l,t,d,total:e+l+t+d}}
 function savedToday(){return TASKS.reduce((a,t)=>a+(S.done[today()+t[0]]?t[2]:0),0)}
@@ -39,7 +44,7 @@ function nudge(){const hr=new Date().getHours();
  if(hr>=10&&hr<16)return`<div class="card nudge sun"><b>☀️ Solar-rich hours (10 am–4 pm)</b><p class="mut">Grid is greenest now. Run heavy appliances like the washing machine and water pump.</p></div>`;
  return`<div class="card nudge"><b>💡 Tip for now</b><p class="mut">Unplug chargers and switch off standby devices before bed. Saves ≈0.4 kg CO₂ per day.</p></div>`}
 function home(){const f=footprint(S.fp),sv=savedToday(),tot=Object.values(S.log).reduce((a,b)=>a+b,0)+sv;const mo=f.total-tot*0;
- return nudge()+`<div class="grid"><div class="card" id="fpcard"><h2>Monthly footprint</h2><div class="big">${fmt(f.total)} kg CO₂</div><p class="mut">Your baseline. India's average household is roughly 150–200 kg/month (indicative).</p>
+ return nudge()+`<div class="grid"><div class="card" id="fpcard"><h2>Monthly footprint <span class="tag">${S.fpRes?"via API":"offline calc"}</span></h2><div class="big">${fmt(f.total)} kg CO₂</div><p class="mut">Your baseline. India's average household is roughly 150–200 kg/month (indicative).</p>
  <div class="stack">${[["⚡ Electricity",f.e],["🔥 LPG",f.l],["🚗 Commute",f.t],["🍽 Food",f.d]].map(x=>`<div class="kv"><span>${x[0]}</span><b>${fmt(x[1])} kg</b></div>`).join("")}</div></div>
  <div class="card"><h2>Today's progress</h2><div style="display:flex;gap:14px;align-items:center">${ring(sv/6.2)}<div><b>${sv.toFixed(1)} kg</b> CO₂ saved today<p class="mut">Lifetime saved: ${tot.toFixed(1)} kg ≈ ${(tot/.82).toFixed(1)} kWh equivalent</p></div></div></div></div>
  <div class="card"><h2>Last 7 days: CO₂ saved (kg)</h2>${chart()}</div>
@@ -65,10 +70,10 @@ function solar(){return`<div class="grid"><div class="card"><h2>Rooftop solar ca
 <label>Tariff (₹/unit)</label><input id="st" type="number" value="6.5" step="0.1">
 <button id="calc">Check feasibility</button></div><div class="card" id="res"><h2>Your estimate</h2><p class="mut">Enter details and tap the button.</p></div></div>
 <div class="card"><h2>Vendor directory (demo listings)</h2><div class="scroll"><table><tr><th>Vendor</th><th>City</th><th>Type</th></tr><tr><td>Empanelled Vendor A</td><td>Ahmedabad</td><td>Rooftop EPC</td></tr><tr><td>Empanelled Vendor B</td><td>Surat</td><td>Rooftop EPC</td></tr><tr><td>Empanelled Vendor C</td><td>Rajkot</td><td>Solar water heater</td></tr></table></div><p class="mut">To be replaced by GEDA's official empanelled-vendor registry and a Maps-based nearby search.</p></div>`}
-function calcSolar(){S.solared=1;save();const y=CITIES[$("sc").value],u=+$("su").value,a=+$("sa").value,t=+$("st").value;
- const need=u*12/y,kw=Math.max(1,Math.min(Math.round(need*2)/2,Math.floor(a/10*2)/2));
- const gen=kw*y,cost=kw*60000,sub=Math.min(kw,2)*30000+(kw>2?(Math.min(kw,3)-2)*18000:0),sav=Math.min(gen,u*12)*t,pb=(cost-sub)/sav,co2=gen*.82/1000;
- $("res").innerHTML=`<h2>Your estimate</h2><div class="big">${kw} kW</div><p class="mut">Recommended system size (~10 m² per kW)</p>
+async function calcSolar(){S.solared=1;save();const city=$("sc").value,y=CITIES[city],u=+$("su").value,a=+$("sa").value,t=+$("st").value;
+ const ra=await api("/v1/solar/estimate",{city,units:u,roof_m2:a,tariff:t});
+ const {kw,yearly_kwh:gen,cost,subsidy:sub,yearly_saving:sav,payback_years:pb,co2_tonnes:co2}=ra||localSolar(y,u,a,t);
+ $("res").innerHTML=`<h2>Your estimate <span class="tag">${ra?"via API":"offline calc"}</span></h2><div class="big">${kw} kW</div><p class="mut">Recommended system size (~10 m² per kW)</p>
  ${[["Yearly generation",fmt(gen)+" units"],["Approx. cost",`₹${fmt(cost)}`],["Subsidy (indicative)",`₹${fmt(sub)}`],["Yearly bill saving",`₹${fmt(sav)}`],["Payback",pb.toFixed(1)+" years"],["CO₂ avoided / year",co2.toFixed(1)+" tonnes"]].map(x=>`<div class="kv"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("")}
  <p class="mut">Indicative only. Confirm costs and subsidy on the official PM Surya Ghar portal or with GEDA.</p>`}
 function admin(){const mx=Math.max(...DISTRICTS.map(d=>d[2]));
@@ -76,7 +81,7 @@ function admin(){const mx=Math.max(...DISTRICTS.map(d=>d[2]));
 <div class="card"><h2>CO₂ saved by district (kg)</h2>${DISTRICTS.map(d=>`<div style="margin:10px 0"><div class="kv" style="border:0"><span>${d[0]} · ${fmt(d[1])} users</span><b>${fmt(d[2])}</b></div><div class="bar"><i style="width:${d[2]/mx*100}%"></i></div></div>`).join("")}</div>
 <div class="card"><h2>Use for policy</h2><p class="mut">Identify low-engagement districts, track solar-lead conversions and publish ward-level campaigns, all from anonymised, aggregated data.</p></div>`}
 function bind(h){
- if($("go"))$("go").onclick=()=>{S.fp={units:+$("u").value,lpg:+$("l").value,km:+$("k").value,mode:$("m").value,diet:$("d").value};S.ts+=50;save();render()};
+ if($("go"))$("go").onclick=async()=>{S.fp={units:+$("u").value,lpg:+$("l").value,km:+$("k").value,mode:$("m").value,diet:$("d").value};S.fpRes=await api("/v1/footprint",{units:S.fp.units,lpg:S.fp.lpg,km_per_day:S.fp.km,mode:S.fp.mode,diet:S.fp.diet});S.ts+=50;save();render()};
  if($("redo"))$("redo").onclick=()=>{S.fp=null;save();render()};
  document.querySelectorAll("[data-t]").forEach(c=>c.onchange=()=>{S.done[today()+c.dataset.t]=c.checked;S.log[today()]=savedToday();save();if(c.checked){chime();window.celebrate&&celebrate()}render()});
  if($("calc"))$("calc").onclick=calcSolar;
